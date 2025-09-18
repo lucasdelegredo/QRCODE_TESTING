@@ -1,276 +1,306 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
-<head>
-  <meta charset="utf-8" />
-  <meta http-equiv="X-UA-Compatible" content="IE=edge">
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Scanner App — QR → JSON</title>
-  <meta name="theme-color" content="#0ea5e9" />
-  <style>
-    :root{
-      --bg: #f6f7fb;
-      --card: #ffffff;
-      --text: #0f172a;
-      --muted: #64748b;
-      --brand: #0ea5e9; /* sky-500 */
-      --brand-2: #0369a1; /* sky-700 */
-      --ok: #10b981;
-      --border: #e5e7eb;
-      --shadow: 0 14px 40px rgba(2,6,23,.10);
-      --radius: 16px;
-    }
-    @media (prefers-color-scheme: dark){
-      :root{
-        --bg: #0b1220;
-        --card: #111827;
-        --text: #e5e7eb;
-        --muted: #94a3b8;
-        --brand: #38bdf8;
-        --brand-2: #0ea5e9;
-        --ok: #34d399;
-        --border: #1f2937;
-        --shadow: 0 14px 40px rgba(0,0,0,.40);
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
+    <title>SCANNER APP</title>
+    <style>
+      body {
+        margin: 0;
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+        background: #f7f8fb;
+        color: #0f172a;
       }
-    }
-    *{box-sizing:border-box}
-    html,body{height:100%}
-    body{
-      margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial;
-      background: linear-gradient(180deg, var(--bg), #eef2ff11);
-      color: var(--text);
-    }
-    header{ position:sticky; top:0; z-index:20; backdrop-filter: blur(8px); background: color-mix(in oklab, var(--card) 88%, transparent); border-bottom:1px solid var(--border); }
-    .wrap{ max-width: 1080px; margin: 0 auto; padding: 14px 16px; }
-    .brand{ display:flex; align-items:center; gap:12px; }
-    .badge{ width:42px; height:42px; border-radius:12px; display:grid; place-items:center; font-weight:800; color:#fff; background: linear-gradient(135deg, var(--brand), var(--brand-2)); box-shadow: var(--shadow); }
-    .title{ margin:0; font-size:18px; font-weight:800; letter-spacing:.2px; }
-    .subtitle{ margin:2px 0 0; color:var(--muted); font-size:12px; }
+      .wrap {
+        max-width: 820px;
+        margin: 0 auto;
+        padding: 16px;
+        text-align: center;
+      }
+      h1 {
+        font-size: 18px;
+        margin: 12px 0 16px;
+      }
 
-    .grid{ display:grid; gap:16px; grid-template-columns: 1fr; }
-    @media (min-width: 980px){ .grid{ grid-template-columns: 1.2fr .8fr; } }
+      /* Área do leitor */
+      #reader {
+        width: 100%;
+        max-width: 540px;
+        margin: 0 auto;
+      }
 
-    .panel{ background: var(--card); border:1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 16px; }
-    .row{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
-    .btn, .select{ appearance:none; border:1px solid var(--border); background: color-mix(in oklab, var(--card) 92%, transparent); color:var(--text); padding:10px 14px; border-radius:12px; font-weight:700; cursor:pointer; transition:.2s ease; outline:none; }
-    .btn.primary{ background: linear-gradient(135deg, var(--brand), var(--brand-2)); color:#fff; border-color: transparent; }
-    .btn.primary:hover{ filter:brightness(1.05) }
-    .btn:disabled{ opacity:.55; cursor:not-allowed }
-    .hint{ font-size:12px; color:var(--muted); margin-top:10px; }
-    .error{ margin-top:12px; padding:10px 12px; border-radius:12px; font-size:14px; color:#ef4444; background: color-mix(in oklab, #ef4444 10%, var(--card)); border:1px solid color-mix(in oklab, #ef4444 25%, var(--border)); }
+      /* Resultado em cards */
+      #resultView {
+        display: none;
+        text-align: left;
+        margin-top: 16px;
+      }
+      .cards {
+        display: grid;
+        gap: 12px;
+        grid-template-columns: 1fr;
+      }
+      @media (min-width: 620px) {
+        .cards {
+          grid-template-columns: repeat(2, 1fr);
+        }
+      }
+      @media (min-width: 960px) {
+        .cards {
+          grid-template-columns: repeat(3, 1fr);
+        }
+      }
+      .card {
+        border: 1px solid #e5e7eb;
+        background: #ffffff;
+        border-radius: 14px;
+        padding: 14px;
+      }
+      .label {
+        color: #64748b;
+        font-size: 11px;
+        letter-spacing: 0.4px;
+        text-transform: uppercase;
+      }
+      .value {
+        margin-top: 4px;
+        font-size: 18px;
+        font-weight: 700;
+        word-break: break-word;
+      }
 
-    /* === ÁREA DE LEITURA MAIOR (MOBILE FIRST) === */
-    #readerWrap{ width:100%; margin:14px auto 0; border:1px solid var(--border); border-radius:14px; overflow:hidden; background:#0b1220; }
-    /* Em celulares, altura grande para priorizar leitura */
-    #reader{ width:100%; height: 72vh; }
-    /* Em tablets/desktop, limite superior confortável */
-    @media (min-width: 980px){ #reader{ height: 560px; } }
+      .toolbar {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        margin: 16px 0 10px;
+      }
+      .btn {
+        appearance: none;
+        border: 1px solid #e5e7eb;
+        background: #ffffff;
+        color: #0f172a;
+        padding: 10px 14px;
+        border-radius: 12px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      .btn.primary {
+        background: linear-gradient(135deg, #0ea5e9, #0369a1);
+        border-color: transparent;
+        color: #fff;
+      }
+      .note {
+        font-size: 12px;
+        color: #64748b;
+        margin-top: 10px;
+        text-align: center;
+      }
+      pre {
+        background: #0b1220;
+        color: #e5e7eb;
+        padding: 12px;
+        border-radius: 12px;
+        border: 1px solid #1f2937;
+        overflow: auto;
+      }
+      .hidden {
+        display: none !important;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- sua biblioteca -->
+    <script src="./qrScript.js"></script>
 
-    /* Cards do resultado */
-    .cards{ display:grid; gap:12px; grid-template-columns: 1fr; }
-    @media (min-width: 640px){ .cards{ grid-template-columns: repeat(2, 1fr); } }
-    @media (min-width: 980px){ .cards{ grid-template-columns: repeat(3, 1fr); } }
-    .card{ border:1px solid var(--border); border-radius:14px; padding:14px; background: color-mix(in oklab, var(--card) 96%, transparent); transition: box-shadow .2s ease, transform .2s ease; }
-    .card:hover{ box-shadow: var(--shadow); transform: translateY(-1px); }
-    .label{ color:var(--muted); font-size:11px; letter-spacing:.4px; text-transform:uppercase }
-    .value{ margin-top:4px; font-size:18px; font-weight:800; word-break:break-word }
-    pre{ background:#0b1220; color:#e5e7eb; padding:12px; border-radius:12px; border:1px solid var(--border); overflow:auto }
+    <div class="wrap">
+      <h1>SCANNER APP</h1>
 
-    .spinner{ width:18px; height:18px; border-radius:50%; border:2px solid color-mix(in oklab, var(--brand) 20%, transparent); border-top-color: var(--brand); animation:spin .8s linear infinite; display:inline-block; vertical-align:-3px; margin-right:6px }
-    @keyframes spin{ to{ transform: rotate(360deg) } }
+      <!-- leitor -->
+      <div id="reader" style="width: 500px;"></div>
+      <p class="note">
+        Aponte a câmera para o QRCode. Após a leitura, os campos serão preenchidos.
+      </p>
 
-    footer{ text-align:center; color:var(--muted); font-size:12px; padding: 28px 16px; }
-  </style>
-</head>
-<body>
-  <!-- Continua usando sua lib local -->
-  <script src="./qrScript.js"></script>
+      <!-- resultado (página de campos) -->
+      <div id="resultView">
+        <div class="toolbar">
+          <h2 style="margin:0">Informações lidas</h2>
+          <div>
+            <button id="btnRescan" class="btn">Ler novamente</button>
+            <button id="btnCopy" class="btn">Copiar JSON</button>
+            <button id="btnDownload" class="btn">Baixar JSON</button>
+          </div>
+        </div>
 
-  <header>
-    <div class="wrap brand">
-      <div class="badge">QR</div>
-      <div>
-        <p class="title">Scanner App</p>
-        <p class="subtitle">Leitura priorizada para celular • JSON em cartões • 100% local</p>
+        <div class="cards">
+          <div class="card">
+            <div class="label">OS</div>
+            <div id="f-os" class="value">—</div>
+          </div>
+          <div class="card">
+            <div class="label">Peça</div>
+            <div id="f-peca" class="value">—</div>
+          </div>
+          <div class="card">
+            <div class="label">Característica</div>
+            <div id="f-caracteristica" class="value">—</div>
+          </div>
+          <div class="card">
+            <div class="label">Descrição</div>
+            <div id="f-descricao" class="value">—</div>
+          </div>
+          <div class="card">
+            <div class="label">Gerado em</div>
+            <div id="f-gerado" class="value">—</div>
+          </div>
+          <div class="card">
+            <div class="label">Tempo de realização</div>
+            <div id="f-tempo" class="value">—</div>
+          </div>
+          <div class="card">
+            <div class="label">Responsável</div>
+            <div id="f-resp" class="value">—</div>
+          </div>
+        </div>
+
+        <div style="margin-top:12px">
+          <details open>
+            <summary style="cursor:pointer; font-weight:700">JSON bruto</summary>
+            <pre id="raw"></pre>
+          </details>
+        </div>
       </div>
     </div>
-  </header>
 
-  <main class="wrap">
-    <div class="grid">
-      <!-- Painel de Leitura -->
-      <section class="panel">
-        <div class="row" style="justify-content:space-between; gap:12px">
-          <div class="row">
-            <button id="btnStart" class="btn primary">Iniciar</button>
-            <button id="btnStop" class="btn" disabled>Parar</button>
-            <button id="btnRescan" class="btn" style="display:none">Ler novamente</button>
-          </div>
-          <div class="row">
-            <button id="btnFullscreen" class="btn" title="Tela cheia">Tela cheia</button>
-          </div>
-        </div>
+    <script>
+      // ===== Scanner (mantendo sua base) =====
+      const html5Qrcode = new Html5Qrcode("reader");
 
-        <div id="readerWrap">
-          <div id="reader"></div>
-        </div>
-        <p id="hint" class="hint">Dica: aproxime o QR até preencher grande parte da área. Em celulares, a área de leitura ocupa ~72% da tela.</p>
-        <div id="error" class="error" style="display:none"></div>
-      </section>
+      // Exibição
+      const resultView = document.getElementById("resultView");
+      const rawEl = document.getElementById("raw");
+      const btnRescan = document.getElementById("btnRescan");
+      const btnCopy = document.getElementById("btnCopy");
+      const btnDownload = document.getElementById("btnDownload");
 
-      <!-- Painel de Resultado -->
-      <section class="panel" id="resultPanel" style="display:none">
-        <div class="row" style="justify-content: space-between;">
-          <h2 style="margin:0">Resultado</h2>
-          <div class="row">
-            <button id="btnCopy" class="btn">Copiar JSON</button>
-            <button id="btnDownload" class="btn" title="Baixar JSON">Baixar</button>
-          </div>
-        </div>
+      // Campos
+      const fOS = document.getElementById("f-os");
+      const fPeca = document.getElementById("f-peca");
+      const fCar = document.getElementById("f-caracteristica");
+      const fDesc = document.getElementById("f-descricao");
+      const fGer = document.getElementById("f-gerado");
+      const fTmp = document.getElementById("f-tempo");
+      const fResp = document.getElementById("f-resp");
 
-        <div class="cards" id="cards" style="margin-top:12px"></div>
-
-        <details style="margin-top:12px" open>
-          <summary style="cursor:pointer; font-weight:700">JSON bruto</summary>
-          <pre id="raw"></pre>
-        </details>
-      </section>
-    </div>
-  </main>
-
-  <footer>Modo escuro automático • Layout mobile-first • Sem frameworks externos</footer>
-
-  <script>
-    // ===== Mantendo sua base: Html5Qrcode da sua ./qrScript.js =====
-    const html5Qrcode = new Html5Qrcode('reader');
-    let lastDecoded = null;
-
-    // ===== UI refs =====
-    const $ = (q)=>document.querySelector(q);
-    const btnStart = $('#btnStart');
-    const btnStop = $('#btnStop');
-    const btnRescan = $('#btnRescan');
-    const btnFullscreen = $('#btnFullscreen');
-    const readerWrap = $('#readerWrap');
-
-    const errorEl = $('#error');
-    const hintEl = $('#hint');
-    const resultPanel = $('#resultPanel');
-    const rawEl = $('#raw');
-    const cardsEl = $('#cards');
-    const btnCopy = $('#btnCopy');
-    const btnDownload = $('#btnDownload');
-
-    // ===== Helpers =====
-    function showError(msg){ errorEl.textContent = msg || ''; errorEl.style.display = msg ? 'block' : 'none'; }
-    function esc(v){ return String(v ?? '').replace(/[&<>]/g, s=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[s])); }
-    function formatDate(v){ try{ const d=new Date(v); if(isNaN(d)) return String(v??''); return new Intl.DateTimeFormat('pt-BR',{dateStyle:'short', timeStyle:'short'}).format(d);}catch{ return String(v??''); } }
-
-    // ===== Config com QRBOX MAIOR e responsivo =====
-    const config = {
-      fps: 15,
-      // O Html5Qrcode passa o tamanho do container (#reader)
-      // Usamos ~90% do menor lado pra fazer um quadrado grande
-      qrbox: (viewport) => {
-        const minSide = Math.min(viewport.width, viewport.height);
-        const size = Math.round(minSide * (viewport.width < 760 ? 0.92 : 0.85));
-        return { width: size, height: size };
-      },
-      // Tenta usar decoder nativo quando disponível
-      experimentalFeatures: { useBarCodeDetectorIfSupported: true }
-      // aspectRatio: 1.777, // descomente se sua câmera exigir proporção fixa
-    };
-
-    // Constraint com prioridade para câmera traseira + alta resolução em mobile
-    const constraints = {
-      facingMode: 'environment',
-      width: { ideal: 1920 },
-      height: { ideal: 1080 },
-      focusMode: 'continuous',
-      advanced: [{ focusMode: 'continuous' }]
-    };
-
-    async function start(){
-      try{
-        showError('');
-        hintEl.innerHTML = '<span class="spinner"></span>Iniciando leitura…';
-
-        // Permissão antecipada melhora compatibilidade em iOS/Android
-        try{ const s = await navigator.mediaDevices.getUserMedia({ video: true }); s.getTracks().forEach(t=>t.stop()); }catch(e){ showError('Permissão de câmera negada/indisponível.'); return; }
-
-        btnStart.disabled = true; btnStop.disabled = false; btnRescan.style.display = 'none';
-        await html5Qrcode.start(constraints, config, onSuccess, () => {});
-        hintEl.textContent = 'Lendo… mantenha o QR grande dentro do quadrado.';
-      }catch(err){
-        btnStart.disabled = false; btnStop.disabled = true;
-        showError('Erro ao iniciar: ' + (err?.message || err));
+      // Helpers
+      function esc(v) {
+        return String(v ?? "").replace(/[&<>]/g, (s) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[s]));
       }
-    }
-
-    async function stop(){
-      try{ await html5Qrcode.stop(); await html5Qrcode.clear(); }catch{}
-      finally{ btnStart.disabled = false; btnStop.disabled = true; btnRescan.style.display = 'inline-block'; hintEl.textContent = 'Leitura pausada.'; }
-    }
-
-    function onSuccess(decodedText){
-      if(!decodedText || decodedText === lastDecoded) return;
-      lastDecoded = decodedText;
-      stop();
-      render(decodedText);
-    }
-
-    function parseJsonTolerante(text){
-      try{ return JSON.parse(text); }catch{}
-      try{ const u=new URL(text); const raw=u.searchParams.get('data')||u.searchParams.get('json'); if(raw) return JSON.parse(raw);}catch{}
-      if(/^\s*\{[\s\S]*\}\s*$/.test(text) && text.includes("'")){
-        let s=text.trim();
-        s=s.replace(/([,{\s])([a-zA-Z0-9_]+)\s*:/g,'$1"$2":');
-        s=s.replace(/'([^']*)'/g,(_m,p1)=>`"${p1.replace(/"/g,'\\"')}"`);
-        try{ return JSON.parse(s); }catch{}
+      function formatDate(v) {
+        try {
+          const d = new Date(v);
+          if (isNaN(d)) return String(v ?? "");
+          return new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(d);
+        } catch {
+          return String(v ?? "");
+        }
       }
-      return null;
-    }
-
-    function render(text){
-      resultPanel.style.display = 'block';
-      let data = parseJsonTolerante(text);
-      if(!data || typeof data !== 'object'){
-        cardsEl.innerHTML=''; rawEl.textContent = text; return;
+      // Parser tolerante: JSON, ?data=..., ou objeto com aspas simples
+      function parseJsonTolerante(text) {
+        try { return JSON.parse(text); } catch {}
+        try {
+          const u = new URL(text);
+          const raw = u.searchParams.get("data") || u.searchParams.get("json");
+          if (raw) return JSON.parse(raw);
+        } catch {}
+        if (/^\s*\{[\s\S]*\}\s*$/.test(text) && text.includes("'")) {
+          let s = text.trim();
+          s = s.replace(/([,{]\s*)([a-zA-Z0-9_]+)\s*:/g, '$1"$2":');
+          s = s.replace(/'([^']*)'/g, (_m, p1) => `"${p1.replace(/"/g, '\\"')}"`);
+          try { return JSON.parse(s); } catch {}
+        }
+        return null;
       }
-      const campos = [
-        ['OS', data.os],
-        ['Peça', data.peca],
-        ['Característica', data.caracteristica],
-        ['Descrição', data.descricao],
-        ['Gerado em', formatDate(data.gerado_em)],
-        ['Tempo de realização', data.tempo_realizacao],
-        ['Responsável', data.responsavel]
-      ];
-      cardsEl.innerHTML='';
-      for(const [label, value] of campos){
-        const c=document.createElement('div');
-        c.className='card';
-        c.innerHTML=`<div class="label">${esc(label)}</div><div class="value">${esc(value ?? '—')}</div>`;
-        cardsEl.appendChild(c);
+
+      // Renderiza os cards e o JSON
+      function renderData(data) {
+        fOS.textContent = esc(data.os ?? "—");
+        fPeca.textContent = esc(data.peca ?? "—");
+        fCar.textContent = esc(data.caracteristica ?? "—");
+        fDesc.textContent = esc(data.descricao ?? "—");
+        fGer.textContent = esc(formatDate(data.gerado_em));
+        fTmp.textContent = esc(data.tempo_realizacao ?? "—");
+        fResp.textContent = esc(data.responsavel ?? "—");
+
+        rawEl.textContent = JSON.stringify(data, null, 2);
       }
-      rawEl.textContent = JSON.stringify(data, null, 2);
-    }
 
-    // Ações
-    btnStart.addEventListener('click', start);
-    btnStop.addEventListener('click', stop);
-    btnRescan.addEventListener('click', ()=>{ lastDecoded=null; start(); });
+      // Callback de sucesso: mostra a “página” com os campos
+      const qrCodeSuccessCallback = async (decodedText /*, decodedResult */) => {
+        if (!decodedText) return;
 
-    // Tela cheia (ajuda a ampliar ainda mais a área de leitura)
-    btnFullscreen.addEventListener('click', async ()=>{
-      const el = readerWrap;
-      try{
-        if(!document.fullscreenElement){ await (el.requestFullscreen?.() || el.webkitRequestFullscreen?.()); }
-        else{ await (document.exitFullscreen?.() || document.webkitExitFullscreen?.()); }
-      }catch{}
-    });
+        // parar leitura
+        try { await html5Qrcode.stop(); await html5Qrcode.clear(); } catch {}
 
-    // Opcional: iniciar automaticamente (com fallback de clique no iOS)
-    window.addEventListener('load', ()=>{ start().catch(()=>{}); });
-  </script>
-</body>
+        // tentar interpretar
+        const data = parseJsonTolerante(decodedText);
+        if (!data || typeof data !== "object") {
+          // se não for JSON, mostra só o bruto
+          resultView.style.display = "block";
+          renderData({ os: "", peca: "", caracteristica: "", descricao: "", gerado_em: "", tempo_realizacao: "", responsavel: "" });
+          rawEl.textContent = decodedText;
+          return;
+        }
+
+        // preencher campos
+        renderData(data);
+        resultView.style.display = "block";
+      };
+
+      // Config do leitor (igual ao seu, com qrbox 250x250)
+      const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+
+      // Inicia automaticamente como no seu exemplo
+      html5Qrcode.start({ facingMode: "environment" }, config, qrCodeSuccessCallback);
+
+      // Ações
+      btnRescan.addEventListener("click", async () => {
+        resultView.style.display = "none";
+        try {
+          await html5Qrcode.start({ facingMode: "environment" }, config, qrCodeSuccessCallback);
+        } catch (e) {
+          alert("Erro ao reiniciar câmera: " + (e?.message || e));
+        }
+      });
+
+      btnCopy.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(rawEl.textContent || "");
+          btnCopy.textContent = "Copiado!";
+          setTimeout(() => (btnCopy.textContent = "Copiar JSON"), 1000);
+        } catch {}
+      });
+
+      btnDownload.addEventListener("click", () => {
+        const blob = new Blob([rawEl.textContent || ""], { type: "application/json" });
+        const a = document.createElement("a");
+        let nome = "qr-dados.json";
+        try {
+          const os = JSON.parse(rawEl.textContent || "{}").os;
+          if (os) nome = `qr-${os}.json`;
+        } catch {}
+        a.href = URL.createObjectURL(blob);
+        a.download = nome;
+        a.click();
+        URL.revokeObjectURL(a.href);
+      });
+    </script>
+  </body>
 </html>
