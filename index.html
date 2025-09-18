@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <title>Leitor de QR → JSON (mobile)</title>
+  <style>
+    :root{
+      --bg:#0b1020; --panel:#0f1730; --ink:#e8eeff; --muted:#a9b3d6; --accent:#7aa2ff; --accent2:#8b5cf6; --ok:#22c55e; --err:#ef4444;
+      --br:18px; --shadow:0 14px 40px rgba(0,0,0,.35);
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0;background:radial-gradient(1200px 800px at 0% -20%,rgba(123,97,255,.18),transparent),
+                      radial-gradient(1200px 800px at 120% 10%,rgba(97,181,255,.12),transparent),
+                      var(--bg);font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:var(--ink)}
+    .wrap{max-width:720px;margin:20px auto;padding:16px}
+    header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+    .title{font-weight:800;font-size:20px}
+    .muted{color:var(--muted)}
+    .card{background:linear-gradient(180deg,var(--panel),#0c142d);border-radius:var(--br);box-shadow:var(--shadow);padding:16px}
+    .controls{display:flex;gap:10px;flex-wrap:wrap}
+    .btn{appearance:none;border:0;border-radius:14px;padding:14px 16px;font-weight:800;color:#fff;background:linear-gradient(135deg,var(--accent),var(--accent2));
+      box-shadow:0 10px 22px rgba(123,97,255,.35);width:100%;text-align:center}
+    .btn.sec{background:#1b2550}
+    .btn.ok{background:linear-gradient(135deg,#34d399,#22c55e)}
+    .btn.err{background:linear-gradient(135deg,#fb7185,#ef4444)}
+    .grid{display:grid;gap:14px}
+    label{font-size:12px;color:var(--muted)}
+    textarea, input[type="text"]{width:100%;padding:12px 14px;border:1px solid #233063;border-radius:12px;background:#0a1230;color:#e8eeff}
+    video{width:100%;border-radius:14px;border:1px solid #233063;background:#000}
+    .pill{display:inline-flex;align-items:center;gap:8px;background:#121c40;border:1px solid #233063;padding:8px 10px;border-radius:999px;font-size:12px}
+    .kv{display:grid;grid-template-columns:max-content 1fr;gap:6px 10px;margin-top:8px}
+    .kv div:nth-child(odd){color:#cfd6ff}
+    .section-title{font-weight:800;color:#cfd6ff;margin:8px 0 6px}
+    pre{background:#0a1230;border:1px solid #233063;border-radius:12px;padding:10px;white-space:pre-wrap;word-break:break-word}
+    .hint{font-size:12px;color:#94a3b8}
+    .center{display:flex;align-items:center;justify-content:center}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="title">Leitor de QR → JSON</div>
+      <div class="pill">Pronto para celular</div>
+    </header>
+
+    <div class="card grid">
+      <div class="controls">
+        <button class="btn" id="btnScan">📷 Escanear QR com a câmera</button>
+        <button class="btn sec" id="btnPaste">📋 Colar conteúdo</button>
+        <input id="filePicker" type="file" accept="image/*" capture="environment" style="display:none" />
+      </div>
+      <div id="scanArea" style="display:none">
+        <label>Visualização da câmera</label>
+        <video id="video" playsinline muted></video>
+        <div class="controls">
+          <button class="btn sec" id="btnStop">Parar</button>
+          <button class="btn ok" id="btnPick">Ler de uma foto…</button>
+        </div>
+      </div>
+      <div class="hint">Dica: se a câmera não abrir, permita o acesso no navegador. Em iOS pode ser necessário usar Safari.</div>
+    </div>
+
+    <div id="resultCard" class="card" style="margin-top:14px; display:none">
+      <div class="section-title">Dados lidos</div>
+      <div id="summary" class="kv"></div>
+      <div class="section-title">JSON bruto</div>
+      <pre id="rawJson">{}</pre>
+      <div class="controls">
+        <button class="btn sec" id="btnCopy">Copiar JSON</button>
+        <button class="btn ok" id="btnShare" style="display:none">Compartilhar</button>
+      </div>
+    </div>
+
+    <div id="errorCard" class="card" style="margin-top:14px; display:none">
+      <div class="section-title">Erro</div>
+      <div id="errMsg" class="hint">—</div>
+    </div>
+  </div>
+
+  <!-- libs: jsQR para decodificar, pako para ungzip se precisar -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jsqr/1.4.0/jsQR.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
+  <script>
+    const els = {
+      btnScan: document.getElementById('btnScan'),
+      btnPaste: document.getElementById('btnPaste'),
+      btnPick: document.getElementById('btnPick'),
+      btnStop: document.getElementById('btnStop'),
+      video: document.getElementById('video'),
+      scanArea: document.getElementById('scanArea'),
+      filePicker: document.getElementById('filePicker'),
+      resultCard: document.getElementById('resultCard'),
+      summary: document.getElementById('summary'),
+      rawJson: document.getElementById('rawJson'),
+      errorCard: document.getElementById('errorCard'),
+      errMsg: document.getElementById('errMsg'),
+      btnCopy: document.getElementById('btnCopy'),
+      btnShare: document.getElementById('btnShare')
+    };
+
+    let stream = null, raf = null;
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+
+    function showError(msg){
+      els.errorCard.style.display = 'block';
+      els.errMsg.textContent = msg;
+    }
+    function clearError(){
+      els.errorCard.style.display = 'none';
+      els.errMsg.textContent = '';
+    }
+
+    async function startCamera(){
+      clearError();
+      els.scanArea.style.display = 'block';
+      try{
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
+        els.video.srcObject = stream; await els.video.play();
+        tick();
+      }catch(e){
+        showError('Não foi possível acessar a câmera. Permita o acesso nas configurações do navegador.');
+      }
+    }
+    function stopCamera(){
+      if(raf) cancelAnimationFrame(raf);
+      if(stream){ stream.getTracks().forEach(t=>t.stop()); stream = null; }
+      els.video.pause(); els.video.srcObject = null; els.scanArea.style.display = 'none';
+    }
+
+    function decodeText(text){
+      // Suporta prefixo gz:<base64>
+      if(text.startsWith('gz:')){
+        try{
+          const b64 = text.slice(3);
+          const bin = atob(b64);
+          const u8 = new Uint8Array(bin.length);
+          for(let i=0;i<bin.length;i++){ u8[i] = bin.charCodeAt(i); }
+          const inflated = pako.inflate(u8);
+          const dec = new TextDecoder('utf-8');
+          return dec.decode(inflated);
+        }catch(e){
+          throw new Error('Falha ao descomprimir gz+base64');
+        }
+      }
+      return text;
+    }
+
+    function parseMaybeJson(text){
+      try{ return [JSON.parse(text), null]; }catch(e){ return [null, 'Conteúdo não é JSON válido.']; }
+    }
+
+    function mapFields(obj){
+      // aceita tanto chaves curtas (o,p,c,d,g,t,r) como longas
+      const val = (a,b)=> obj[a] ?? obj[b] ?? '';
+      const dataIso = val('g','gerado_em');
+      let dataFmt = '';
+      try{ dataFmt = dataIso ? new Date(dataIso).toLocaleString() : ''; }catch(_){ dataFmt = dataIso; }
+      return {
+        os: val('o','os'),
+        peca: val('p','peca'),
+        caracteristica: val('c','caracteristica'),
+        descricao: val('d','descricao'),
+        gerado_em: dataFmt,
+        tempo: val('t','tempo_realizacao'),
+        responsavel: val('r','responsavel')
+      };
+    }
+
+    function renderSummary(obj){
+      const f = mapFields(obj);
+      const rows = [];
+      const push = (k,v)=>{ if(v!==undefined && v!==null && String(v).trim()!==''){ rows.push(`<div>${k}</div><div>${escapeHtml(String(v))}</div>`);} };
+      push('OS', f.os);
+      push('Peça', f.peca);
+      push('Característica', f.caracteristica);
+      push('Descrição', f.descricao);
+      push('Gerado em', f.gerado_em);
+      push('Tempo para realização', f.tempo);
+      push('Responsável', f.responsavel);
+      els.summary.innerHTML = rows.join('') || '<div class="hint">Sem campos reconhecidos.</div>';
+      els.resultCard.style.display = 'block';
+      els.rawJson.textContent = JSON.stringify(obj, null, 2);
+      // Compartilhar (quando suportado)
+      if(navigator.share){
+        els.btnShare.style.display = 'block';
+        els.btnShare.onclick = ()=>{
+          const txt = `OS: ${f.os}\nPeça: ${f.peca}\nDescrição: ${f.descricao || ''}`.trim();
+          navigator.share({ title: 'OS '+(f.os||''), text: txt }).catch(()=>{});
+        };
+      }
+    }
+
+    function escapeHtml(s){
+      return s.replace(/[&<>"']/g, c=> ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]));
+    }
+
+    function tick(){
+      if(!els.video.videoWidth){ raf = requestAnimationFrame(tick); return; }
+      canvas.width = els.video.videoWidth; canvas.height = els.video.videoHeight;
+      ctx.drawImage(els.video,0,0,canvas.width,canvas.height);
+      const img = ctx.getImageData(0,0,canvas.width,canvas.height);
+      const code = jsQR(img.data, img.width, img.height, { inversionAttempts: 'dontInvert' });
+      if(code && code.data){
+        stopCamera();
+        handleContent(code.data);
+        return;
+      }
+      raf = requestAnimationFrame(tick);
+    }
+
+    function handleContent(text){
+      clearError();
+      let decoded;
+      try{ decoded = decodeText(text); }
+      catch(e){ showError(e.message); return; }
+      const [obj, err] = parseMaybeJson(decoded);
+      if(err){ showError(err); els.rawJson.textContent = decoded; els.resultCard.style.display='block'; return; }
+      renderSummary(obj);
+    }
+
+    // Eventos
+    els.btnScan.onclick = startCamera;
+    els.btnStop.onclick = stopCamera;
+    els.btnPaste.onclick = async ()=>{
+      try{
+        const text = await navigator.clipboard.readText();
+        if(!text){ showError('Área de transferência vazia.'); return; }
+        handleContent(text);
+      }catch(e){ showError('Não consegui ler do clipboard. Cole manualmente em um campo de texto.'); }
+    };
+    els.btnCopy.onclick = async ()=>{
+      try{ await navigator.clipboard.writeText(els.rawJson.textContent); }catch(_){ /* ignore */ }
+    };
+    els.btnPick.onclick = ()=> els.filePicker.click();
+    els.filePicker.onchange = async (e)=>{
+      const file = e.target.files && e.target.files[0];
+      if(!file) return;
+      const img = new Image();
+      img.onload = ()=>{
+        canvas.width = img.width; canvas.height = img.height;
+        ctx.drawImage(img,0,0);
+        const data = ctx.getImageData(0,0,canvas.width,canvas.height);
+        const code = jsQR(data.data, data.width, data.height);
+        if(code && code.data) handleContent(code.data); else showError('QR não detectado na imagem.');
+      };
+      img.onerror = ()=> showError('Não foi possível ler a imagem.');
+      img.src = URL.createObjectURL(file);
+    };
+  </script>
+</body>
+</html>
