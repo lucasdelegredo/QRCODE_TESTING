@@ -2,253 +2,326 @@
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
-  <title>Leitor de QR → JSON (mobile)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Leitor de QRCode (JSON)</title>
+  <!-- Tailwind via CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <meta name="theme-color" content="#0ea5e9" />
+  <!-- html5-qrcode library -->
+  <script src="https://unpkg.com/html5-qrcode" defer></script>
   <style>
-    :root{
-      --bg:#0b1020; --panel:#0f1730; --ink:#e8eeff; --muted:#a9b3d6; --accent:#7aa2ff; --accent2:#8b5cf6; --ok:#22c55e; --err:#ef4444;
-      --br:18px; --shadow:0 14px 40px rgba(0,0,0,.35);
-    }
-    *{box-sizing:border-box}
-    html,body{height:100%}
-    body{margin:0;background:radial-gradient(1200px 800px at 0% -20%,rgba(123,97,255,.18),transparent),
-                      radial-gradient(1200px 800px at 120% 10%,rgba(97,181,255,.12),transparent),
-                      var(--bg);font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:var(--ink)}
-    .wrap{max-width:720px;margin:20px auto;padding:16px}
-    header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
-    .title{font-weight:800;font-size:20px}
-    .muted{color:var(--muted)}
-    .card{background:linear-gradient(180deg,var(--panel),#0c142d);border-radius:var(--br);box-shadow:var(--shadow);padding:16px}
-    .controls{display:flex;gap:10px;flex-wrap:wrap}
-    .btn{appearance:none;border:0;border-radius:14px;padding:14px 16px;font-weight:800;color:#fff;background:linear-gradient(135deg,var(--accent),var(--accent2));
-      box-shadow:0 10px 22px rgba(123,97,255,.35);width:100%;text-align:center}
-    .btn.sec{background:#1b2550}
-    .btn.ok{background:linear-gradient(135deg,#34d399,#22c55e)}
-    .btn.err{background:linear-gradient(135deg,#fb7185,#ef4444)}
-    .grid{display:grid;gap:14px}
-    label{font-size:12px;color:var(--muted)}
-    textarea, input[type="text"]{width:100%;padding:12px 14px;border:1px solid #233063;border-radius:12px;background:#0a1230;color:#e8eeff}
-    video{width:100%;border-radius:14px;border:1px solid #233063;background:#000}
-    .pill{display:inline-flex;align-items:center;gap:8px;background:#121c40;border:1px solid #233063;padding:8px 10px;border-radius:999px;font-size:12px}
-    .kv{display:grid;grid-template-columns:max-content 1fr;gap:6px 10px;margin-top:8px}
-    .kv div:nth-child(odd){color:#cfd6ff}
-    .section-title{font-weight:800;color:#cfd6ff;margin:8px 0 6px}
-    pre{background:#0a1230;border:1px solid #233063;border-radius:12px;padding:10px;white-space:pre-wrap;word-break:break-word}
-    .hint{font-size:12px;color:#94a3b8}
-    .center{display:flex;align-items:center;justify-content:center}
+    /* Suporte a overscroll em iOS para evitar bounce dentro do app */
+    body { overscroll-behavior: contain; }
   </style>
 </head>
-<body>
-  <div class="wrap">
-    <header>
-      <div class="title">Leitor de QR → JSON</div>
-      <div class="pill">Pronto para celular</div>
-    </header>
-
-    <div class="card grid">
-      <div class="controls">
-        <button class="btn" id="btnScan">📷 Escanear QR com a câmera</button>
-        <button class="btn sec" id="btnPaste">📋 Colar conteúdo</button>
-        <input id="filePicker" type="file" accept="image/*" capture="environment" style="display:none" />
+<body class="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 text-slate-800">
+  <header class="sticky top-0 z-10 backdrop-blur bg-white/70 border-b border-slate-200">
+    <div class="max-w-3xl mx-auto p-4 flex items-center gap-3">
+      <div class="w-10 h-10 rounded-2xl bg-sky-500 flex items-center justify-center text-white font-bold">QR</div>
+      <div>
+        <h1 class="text-xl font-semibold leading-tight">Leitor de QRCode • JSON</h1>
+        <p class="text-xs text-slate-500 -mt-0.5">Aponte a câmera para um QRCode que contenha um JSON.</p>
       </div>
-      <div id="scanArea" style="display:none">
-        <label>Visualização da câmera</label>
-        <video id="video" playsinline muted></video>
-        <div class="controls">
-          <button class="btn sec" id="btnStop">Parar</button>
-          <button class="btn ok" id="btnPick">Ler de uma foto…</button>
+      <div class="ml-auto flex items-center gap-2">
+        <button id="themeToggle" class="text-xs px-3 py-2 rounded-xl border border-slate-300 hover:bg-slate-100">Tema</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-3xl mx-auto p-4 space-y-4">
+    <!-- Controle da câmera -->
+    <section class="p-4 bg-white rounded-2xl shadow-sm border border-slate-200">
+      <div class="flex flex-col sm:flex-row sm:items-end gap-3">
+        <div class="flex-1">
+          <label for="cameraSelect" class="text-sm text-slate-600">Câmera</label>
+          <select id="cameraSelect" class="w-full mt-1 px-3 py-2 rounded-xl border border-slate-300 bg-white"></select>
+        </div>
+        <div class="flex items-center gap-2">
+          <button id="btnStart" class="px-4 py-2 rounded-xl bg-sky-600 text-white hover:bg-sky-700 disabled:opacity-50">Iniciar</button>
+          <button id="btnStop" class="px-4 py-2 rounded-xl border border-slate-300 hover:bg-slate-100 disabled:opacity-50" disabled>Parar</button>
+          <button id="btnFlip" class="px-3 py-2 rounded-xl border border-slate-300 hover:bg-slate-100" title="Alternar câmera">↺</button>
         </div>
       </div>
-      <div class="hint">Dica: se a câmera não abrir, permita o acesso no navegador. Em iOS pode ser necessário usar Safari.</div>
-    </div>
+      <div id="reader" class="mt-4 rounded-2xl overflow-hidden border border-slate-200"></div>
+      <p id="hint" class="mt-2 text-xs text-slate-500">Dica: use a câmera traseira para melhor foco. A leitura é automática.</p>
+    </section>
 
-    <div id="resultCard" class="card" style="margin-top:14px; display:none">
-      <div class="section-title">Dados lidos</div>
-      <div id="summary" class="kv"></div>
-      <div class="section-title">JSON bruto</div>
-      <pre id="rawJson">{}</pre>
-      <div class="controls">
-        <button class="btn sec" id="btnCopy">Copiar JSON</button>
-        <button class="btn ok" id="btnShare" style="display:none">Compartilhar</button>
+    <!-- Resultado visual -->
+    <section id="resultSection" class="hidden p-4 bg-white rounded-2xl shadow-sm border border-slate-200">
+      <div class="flex items-start gap-3">
+        <div class="flex-1">
+          <h2 class="text-lg font-semibold">Informações lidas</h2>
+          <p class="text-sm text-slate-500">Dados extraídos do QRCode e organizados.</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <button id="btnRescan" class="px-3 py-2 rounded-xl border border-slate-300 hover:bg-slate-100">Ler novamente</button>
+          <button id="btnCopy" class="px-3 py-2 rounded-xl border border-slate-300 hover:bg-slate-100">Copiar JSON</button>
+          <button id="btnDownload" class="px-3 py-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700">Baixar JSON</button>
+        </div>
       </div>
-    </div>
 
-    <div id="errorCard" class="card" style="margin-top:14px; display:none">
-      <div class="section-title">Erro</div>
-      <div id="errMsg" class="hint">—</div>
-    </div>
-  </div>
+      <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3" id="cards"></div>
 
-  <!-- libs: jsQR para decodificar, pako para ungzip se precisar -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jsqr/1.4.0/jsQR.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
+      <details class="mt-4 open:bg-slate-50 rounded-xl">
+        <summary class="cursor-pointer px-3 py-2 rounded-xl border border-slate-200">JSON bruto</summary>
+        <pre id="raw" class="mt-2 p-3 text-xs rounded-xl bg-slate-900 text-slate-100 overflow-auto"></pre>
+      </details>
+    </section>
+
+    <!-- Entrada manual -->
+    <section class="p-4 bg-white rounded-2xl shadow-sm border border-slate-200">
+      <h3 class="font-medium">Colar JSON manualmente (opcional)</h3>
+      <p class="text-sm text-slate-500">Cole um JSON aqui para testar, caso não tenha um QRCode agora.</p>
+      <textarea id="manualJson" rows="4" class="mt-2 w-full rounded-xl border border-slate-300 p-3 font-mono text-sm" placeholder='{"os":"12345678","peca":"TESTE","caracteristica":"10X20X30","descricao":"TESTE DESCRICAO","gerado_em":"2025-09-18T12:28:00.000Z","tempo_realizacao":"2h30min","responsavel":"Lucas"}'></textarea>
+      <div class="mt-2 flex gap-2">
+        <button id="btnParseManual" class="px-4 py-2 rounded-xl bg-sky-600 text-white hover:bg-sky-700">Ler JSON</button>
+        <button id="btnExemplo" class="px-4 py-2 rounded-xl border border-slate-300 hover:bg-slate-100">Usar exemplo</button>
+      </div>
+    </section>
+
+    <footer class="py-6 text-center text-xs text-slate-500">
+      Feito para celular • funciona no desktop também. Nenhum dado é enviado a servidores: tudo roda no seu navegador.
+    </footer>
+  </main>
+
   <script>
-    const els = {
-      btnScan: document.getElementById('btnScan'),
-      btnPaste: document.getElementById('btnPaste'),
-      btnPick: document.getElementById('btnPick'),
-      btnStop: document.getElementById('btnStop'),
-      video: document.getElementById('video'),
-      scanArea: document.getElementById('scanArea'),
-      filePicker: document.getElementById('filePicker'),
-      resultCard: document.getElementById('resultCard'),
-      summary: document.getElementById('summary'),
-      rawJson: document.getElementById('rawJson'),
-      errorCard: document.getElementById('errorCard'),
-      errMsg: document.getElementById('errMsg'),
-      btnCopy: document.getElementById('btnCopy'),
-      btnShare: document.getElementById('btnShare')
+    // Estado global simples
+    let html5Qr;               // Instância do Html5Qrcode
+    let currentCameraId = null;
+    let lastDecoded = null;
+
+    const $ = (q) => document.querySelector(q);
+    const cameraSelect = $('#cameraSelect');
+    const btnStart = $('#btnStart');
+    const btnStop = $('#btnStop');
+    const btnFlip = $('#btnFlip');
+    const readerEl = $('#reader');
+    const resultSection = $('#resultSection');
+    const cardsEl = $('#cards');
+    const rawEl = $('#raw');
+
+    const btnRescan = $('#btnRescan');
+    const btnCopy = $('#btnCopy');
+    const btnDownload = $('#btnDownload');
+
+    const manualJson = $('#manualJson');
+    const btnParseManual = $('#btnParseManual');
+    const btnExemplo = $('#btnExemplo');
+    const themeToggle = $('#themeToggle');
+
+    // Tema claro/escuro
+    const setTheme = (dark) => {
+      document.documentElement.classList.toggle('dark', dark);
+      document.body.className = document.body.className.replace('from-slate-50 to-slate-100', 'from-slate-900 to-slate-800');
+      if (!dark) {
+        document.body.className = document.body.className.replace('from-slate-900 to-slate-800', 'from-slate-50 to-slate-100');
+      }
     };
+    themeToggle.addEventListener('click', () => {
+      const dark = !document.documentElement.classList.contains('dark');
+      setTheme(dark);
+    });
 
-    let stream = null, raf = null;
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-
-    function showError(msg){
-      els.errorCard.style.display = 'block';
-      els.errMsg.textContent = msg;
-    }
-    function clearError(){
-      els.errorCard.style.display = 'none';
-      els.errMsg.textContent = '';
-    }
-
-    async function startCamera(){
-      clearError();
-      els.scanArea.style.display = 'block';
-      try{
-        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
-        els.video.srcObject = stream; await els.video.play();
-        tick();
-      }catch(e){
-        showError('Não foi possível acessar a câmera. Permita o acesso nas configurações do navegador.');
-      }
-    }
-    function stopCamera(){
-      if(raf) cancelAnimationFrame(raf);
-      if(stream){ stream.getTracks().forEach(t=>t.stop()); stream = null; }
-      els.video.pause(); els.video.srcObject = null; els.scanArea.style.display = 'none';
-    }
-
-    function decodeText(text){
-      // Suporta prefixo gz:<base64>
-      if(text.startsWith('gz:')){
-        try{
-          const b64 = text.slice(3);
-          const bin = atob(b64);
-          const u8 = new Uint8Array(bin.length);
-          for(let i=0;i<bin.length;i++){ u8[i] = bin.charCodeAt(i); }
-          const inflated = pako.inflate(u8);
-          const dec = new TextDecoder('utf-8');
-          return dec.decode(inflated);
-        }catch(e){
-          throw new Error('Falha ao descomprimir gz+base64');
+    // Preenche o select de câmeras
+    async function listarCameras() {
+      try {
+        const devices = await Html5Qrcode.getCameras();
+        cameraSelect.innerHTML = '';
+        devices.forEach((d, i) => {
+          const opt = document.createElement('option');
+          opt.value = d.id;
+          opt.textContent = d.label || `Câmera ${i+1}`;
+          cameraSelect.appendChild(opt);
+        });
+        if (devices.length) {
+          currentCameraId = devices.find(x => /back|traseira|rear/i.test(x.label))?.id || devices[0].id;
+          cameraSelect.value = currentCameraId;
         }
-      }
-      return text;
-    }
-
-    function parseMaybeJson(text){
-      try{ return [JSON.parse(text), null]; }catch(e){ return [null, 'Conteúdo não é JSON válido.']; }
-    }
-
-    function mapFields(obj){
-      // aceita tanto chaves curtas (o,p,c,d,g,t,r) como longas
-      const val = (a,b)=> obj[a] ?? obj[b] ?? '';
-      const dataIso = val('g','gerado_em');
-      let dataFmt = '';
-      try{ dataFmt = dataIso ? new Date(dataIso).toLocaleString() : ''; }catch(_){ dataFmt = dataIso; }
-      return {
-        os: val('o','os'),
-        peca: val('p','peca'),
-        caracteristica: val('c','caracteristica'),
-        descricao: val('d','descricao'),
-        gerado_em: dataFmt,
-        tempo: val('t','tempo_realizacao'),
-        responsavel: val('r','responsavel')
-      };
-    }
-
-    function renderSummary(obj){
-      const f = mapFields(obj);
-      const rows = [];
-      const push = (k,v)=>{ if(v!==undefined && v!==null && String(v).trim()!==''){ rows.push(`<div>${k}</div><div>${escapeHtml(String(v))}</div>`);} };
-      push('OS', f.os);
-      push('Peça', f.peca);
-      push('Característica', f.caracteristica);
-      push('Descrição', f.descricao);
-      push('Gerado em', f.gerado_em);
-      push('Tempo para realização', f.tempo);
-      push('Responsável', f.responsavel);
-      els.summary.innerHTML = rows.join('') || '<div class="hint">Sem campos reconhecidos.</div>';
-      els.resultCard.style.display = 'block';
-      els.rawJson.textContent = JSON.stringify(obj, null, 2);
-      // Compartilhar (quando suportado)
-      if(navigator.share){
-        els.btnShare.style.display = 'block';
-        els.btnShare.onclick = ()=>{
-          const txt = `OS: ${f.os}\nPeça: ${f.peca}\nDescrição: ${f.descricao || ''}`.trim();
-          navigator.share({ title: 'OS '+(f.os||''), text: txt }).catch(()=>{});
-        };
+      } catch (e) {
+        console.warn('Não foi possível listar câmeras ainda. O navegador pode exigir permissão antes.');
       }
     }
 
-    function escapeHtml(s){
-      return s.replace(/[&<>"']/g, c=> ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]));
+    // Iniciar leitura
+    async function iniciarLeitura() {
+      try {
+        if (!html5Qr) html5Qr = new Html5Qrcode(readerEl.id);
+        const camId = cameraSelect.value || { facingMode: 'environment' };
+
+        btnStart.disabled = true;
+        btnStop.disabled = false;
+        btnFlip.disabled = false;
+
+        await html5Qr.start(
+          camId,
+          { fps: 10, qrbox: calcularQrbox() },
+          onScanSuccess,
+          onScanFailure
+        );
+      } catch (err) {
+        alert('Erro ao iniciar câmera: ' + (err?.message || err));
+        btnStart.disabled = false;
+        btnStop.disabled = true;
+      }
     }
 
-    function tick(){
-      if(!els.video.videoWidth){ raf = requestAnimationFrame(tick); return; }
-      canvas.width = els.video.videoWidth; canvas.height = els.video.videoHeight;
-      ctx.drawImage(els.video,0,0,canvas.width,canvas.height);
-      const img = ctx.getImageData(0,0,canvas.width,canvas.height);
-      const code = jsQR(img.data, img.width, img.height, { inversionAttempts: 'dontInvert' });
-      if(code && code.data){
-        stopCamera();
-        handleContent(code.data);
+    function calcularQrbox() {
+      const vw = Math.min(window.innerWidth, 600);
+      const size = Math.round(vw * 0.7);
+      return { width: size, height: size };
+    }
+
+    // Parar leitura
+    async function pararLeitura() {
+      if (html5Qr) {
+        await html5Qr.stop().catch(() => {});
+        await html5Qr.clear().catch(() => {});
+      }
+      btnStart.disabled = false;
+      btnStop.disabled = true;
+    }
+
+    // Alternar câmera rapidamente
+    function alternarCamera() {
+      const options = Array.from(cameraSelect.options);
+      if (!options.length) return;
+      const idx = options.findIndex(o => o.value === cameraSelect.value);
+      const next = options[(idx + 1) % options.length];
+      cameraSelect.value = next.value;
+      pararLeitura().then(iniciarLeitura);
+    }
+
+    // Handlers de leitura
+    function onScanSuccess(decodedText) {
+      if (!decodedText || decodedText === lastDecoded) return;
+      lastDecoded = decodedText;
+      processarJson(decodedText);
+      // Para evitar leituras repetidas, paramos a câmera
+      pararLeitura();
+    }
+
+    function onScanFailure(/* error */) {
+      // silencioso – acontece quando não há QR no quadro
+    }
+
+    // Processa o JSON e mostra na tela
+    function processarJson(text) {
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        // Pode ser que o QR contenha URL com query ?data=...
+        try {
+          const url = new URL(text);
+          const d = url.searchParams.get('data') || url.searchParams.get('json');
+          if (d) data = JSON.parse(d);
+        } catch {}
+      }
+
+      if (!data || typeof data !== 'object') {
+        alert('O QRCode não contém um JSON válido.');
         return;
       }
-      raf = requestAnimationFrame(tick);
+
+      // Renderiza cartões
+      const campos = [
+        ['OS', data.os],
+        ['Peça', data.peca],
+        ['Característica', data.caracteristica],
+        ['Descrição', data.descricao],
+        ['Gerado em', formatarData(data.gerado_em)],
+        ['Tempo de realização', data.tempo_realizacao],
+        ['Responsável', data.responsavel]
+      ];
+
+      cardsEl.innerHTML = '';
+      campos.forEach(([label, value]) => {
+        const card = document.createElement('div');
+        card.className = 'p-4 rounded-xl border border-slate-200 bg-slate-50';
+        card.innerHTML = `
+          <div class="text-xs uppercase tracking-wide text-slate-500">${esc(label)}</div>
+          <div class="mt-1 text-lg font-medium text-slate-900">${esc(value ?? '—')}</div>
+        `;
+        cardsEl.appendChild(card);
+      });
+
+      rawEl.textContent = JSON.stringify(data, null, 2);
+      resultSection.classList.remove('hidden');
+      document.getElementById('hint').textContent = 'Leitura concluída. Você pode ler novamente se desejar.';
     }
 
-    function handleContent(text){
-      clearError();
-      let decoded;
-      try{ decoded = decodeText(text); }
-      catch(e){ showError(e.message); return; }
-      const [obj, err] = parseMaybeJson(decoded);
-      if(err){ showError(err); els.rawJson.textContent = decoded; els.resultCard.style.display='block'; return; }
-      renderSummary(obj);
+    function esc(v) {
+      return String(v ?? '').replace(/[&<>]/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[s]));
     }
 
-    // Eventos
-    els.btnScan.onclick = startCamera;
-    els.btnStop.onclick = stopCamera;
-    els.btnPaste.onclick = async ()=>{
-      try{
-        const text = await navigator.clipboard.readText();
-        if(!text){ showError('Área de transferência vazia.'); return; }
-        handleContent(text);
-      }catch(e){ showError('Não consegui ler do clipboard. Cole manualmente em um campo de texto.'); }
-    };
-    els.btnCopy.onclick = async ()=>{
-      try{ await navigator.clipboard.writeText(els.rawJson.textContent); }catch(_){ /* ignore */ }
-    };
-    els.btnPick.onclick = ()=> els.filePicker.click();
-    els.filePicker.onchange = async (e)=>{
-      const file = e.target.files && e.target.files[0];
-      if(!file) return;
-      const img = new Image();
-      img.onload = ()=>{
-        canvas.width = img.width; canvas.height = img.height;
-        ctx.drawImage(img,0,0);
-        const data = ctx.getImageData(0,0,canvas.width,canvas.height);
-        const code = jsQR(data.data, data.width, data.height);
-        if(code && code.data) handleContent(code.data); else showError('QR não detectado na imagem.');
+    function formatarData(v) {
+      try {
+        const d = new Date(v);
+        if (isNaN(d)) return String(v ?? '');
+        return new Intl.DateTimeFormat('pt-BR', {
+          dateStyle: 'short', timeStyle: 'short'
+        }).format(d);
+      } catch {
+        return String(v ?? '');
+      }
+    }
+
+    // Ações dos botões
+    btnStart.addEventListener('click', iniciarLeitura);
+    btnStop.addEventListener('click', pararLeitura);
+    btnFlip.addEventListener('click', alternarCamera);
+
+    btnRescan.addEventListener('click', () => {
+      resultSection.classList.add('hidden');
+      lastDecoded = null;
+      iniciarLeitura();
+    });
+
+    btnCopy.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(rawEl.textContent);
+        btnCopy.textContent = 'Copiado!';
+        setTimeout(() => (btnCopy.textContent = 'Copiar JSON'), 1200);
+      } catch {
+        alert('Não foi possível copiar. Selecione o texto e copie manualmente.');
+      }
+    });
+
+    btnDownload.addEventListener('click', () => {
+      const blob = new Blob([rawEl.textContent], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      try {
+        const { os = 'dados' } = JSON.parse(rawEl.textContent || '{}');
+        a.download = `qr-${os}.json`;
+      } catch { a.download = 'qr.json'; }
+      a.click();
+      URL.revokeObjectURL(a.href);
+    });
+
+    btnParseManual.addEventListener('click', () => processarJson(manualJson.value));
+    btnExemplo.addEventListener('click', () => {
+      const exemplo = {
+        os: '12345678',
+        peca: 'TESTE',
+        caracteristica: '10X20X30',
+        descricao: 'TESTE DESCRICAO',
+        gerado_em: '2025-09-18T12:28:00.000Z',
+        tempo_realizacao: '2h30min',
+        responsavel: 'Lucas'
       };
-      img.onerror = ()=> showError('Não foi possível ler a imagem.');
-      img.src = URL.createObjectURL(file);
-    };
+      manualJson.value = JSON.stringify(exemplo, null, 2);
+      processarJson(JSON.stringify(exemplo));
+    });
+
+    // Inicialização
+    window.addEventListener('load', listarCameras);
+    window.addEventListener('resize', () => {
+      // Ajusta a caixa de leitura se estiver ativo
+      if (html5Qr && !btnStart.disabled) {
+        pararLeitura().then(iniciarLeitura);
+      }
+    });
   </script>
 </body>
 </html>
