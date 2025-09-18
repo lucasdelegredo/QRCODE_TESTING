@@ -1,33 +1,340 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SCANNER APP</title>
+  <meta charset="utf-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Scanner App — QR → JSON</title>
+  <meta name="theme-color" content="#0ea5e9" />
+  <style>
+    :root{
+      --bg: #f7f8fb;
+      --card: #ffffff;
+      --text: #0f172a;
+      --muted: #64748b;
+      --brand: #0ea5e9;
+      --brand-2: #0369a1;
+      --ok: #10b981;
+      --border: #e5e7eb;
+      --shadow: 0 10px 30px rgba(2,6,23,.08);
+      --radius: 16px;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root{
+        --bg: #0b1220;
+        --card: #111827;
+        --text: #e5e7eb;
+        --muted: #94a3b8;
+        --brand: #38bdf8;
+        --brand-2: #0ea5e9;
+        --ok: #34d399;
+        --border: #1f2937;
+        --shadow: 0 10px 30px rgba(0,0,0,.35);
+      }
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body{
+      margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans";
+      background: linear-gradient(180deg, var(--bg), #eef2ff11);
+      color: var(--text);
+    }
+    header{
+      position: sticky; top:0; z-index: 10;
+      backdrop-filter: blur(8px);
+      background: color-mix(in oklab, var(--card) 85%, transparent);
+      border-bottom: 1px solid var(--border);
+    }
+    .wrap { max-width: 980px; margin: 0 auto; padding: 16px; }
+    .brand{
+      display:flex; align-items:center; gap:12px;
+    }
+    .badge{
+      width:40px; height:40px; border-radius:12px;
+      display:grid; place-items:center; font-weight:700; color:#fff;
+      background: linear-gradient(135deg, var(--brand), var(--brand-2));
+      box-shadow: var(--shadow);
+    }
+    .title{ margin:0; font-size:18px; font-weight:700; letter-spacing:.2px;}
+    .subtitle{ margin:2px 0 0; color: var(--muted); font-size:12px;}
+
+    .grid { display:grid; grid-template-columns: 1fr; gap:16px; }
+    @media (min-width: 760px){ .grid { grid-template-columns: 1.2fr .8fr; } }
+
+    .panel{
+      background: var(--card); border:1px solid var(--border);
+      border-radius: var(--radius); padding:16px; box-shadow: var(--shadow);
+    }
+    .controls{ display:flex; gap:8px; flex-wrap: wrap; align-items: center; }
+    .select, .btn{
+      appearance:none; border:1px solid var(--border); background: transparent;
+      color: var(--text); padding:10px 12px; border-radius:12px; font-weight:600; cursor:pointer;
+      transition: .2s ease; outline:none;
+    }
+    .btn{ background: color-mix(in oklab, var(--card) 90%, var(--bg)); }
+    .btn.primary{ background: linear-gradient(135deg, var(--brand), var(--brand-2)); border-color: transparent; color:#fff; }
+    .btn.primary:hover{ filter: brightness(1.05); }
+    .btn:disabled{ opacity:.5; cursor:not-allowed; }
+    .help{ font-size:12px; color: var(--muted); margin-top:10px; }
+
+    #reader{
+      width: 100%; max-width: 540px; margin: 16px auto 0;
+      aspect-ratio: 1/1; border-radius: 14px; overflow: hidden;
+      border:1px solid var(--border); background: #0b1220;
+    }
+
+    .error{
+      margin-top:12px; padding:10px 12px; border-radius:12px; font-size:14px;
+      color:#ef4444; background: color-mix(in oklab, #ef4444 10%, var(--card));
+      border: 1px solid color-mix(in oklab, #ef4444 25%, var(--border));
+    }
+
+    .cards{ display:grid; gap:12px; grid-template-columns: 1fr; }
+    @media (min-width: 620px){ .cards{ grid-template-columns: repeat(2, 1fr); } }
+    @media (min-width: 960px){ .cards{ grid-template-columns: repeat(3, 1fr); } }
+    .card{
+      border:1px solid var(--border); background: color-mix(in oklab, var(--card) 96%, transparent);
+      border-radius: 14px; padding:14px; transition: box-shadow .2s ease, transform .2s ease;
+    }
+    .card:hover{ box-shadow: var(--shadow); transform: translateY(-1px); }
+    .label{ color: var(--muted); font-size:11px; letter-spacing:.4px; text-transform: uppercase; }
+    .value{ margin-top:4px; font-size:18px; font-weight:700; word-break: break-word; }
+
+    pre{
+      background: #0b1220; color: #e5e7eb; padding:12px; border-radius:12px; overflow:auto;
+      border:1px solid var(--border);
+    }
+    .row{ display:flex; gap:8px; flex-wrap: wrap; align-items: center; }
+    .spacer{ height:8px; }
+    footer{ text-align:center; color: var(--muted); font-size:12px; padding: 24px 12px; }
+
+    /* pequeno spinner quando iniciando */
+    .spinner{ width:18px; height:18px; border-radius:50%;
+      border:2px solid color-mix(in oklab, var(--brand) 20%, transparent);
+      border-top-color: var(--brand); animation: spin .8s linear infinite; display:inline-block; vertical-align:-3px; margin-right:6px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
 </head>
 <body>
-    <script src="./qrScript.js"></script>
-    <div style="text-align: center;">
+  <!-- Biblioteca que VOCÊ já usa -->
+  <script src="./qrScript.js"></script>
 
-        <div id="reader" style="width: 500px;"></div>
-        <div id="show" style="display: none;">
-            <h4>Scanned Result</h4>
-            <p style="color: blue;" id="result"></p>
-        </div>
+  <header>
+    <div class="wrap brand">
+      <div class="badge">QR</div>
+      <div>
+        <p class="title">Scanner App</p>
+        <p class="subtitle">Leia um QRCode e visualize o JSON em cartões — tudo local, sem servidores.</p>
+      </div>
+      <div style="margin-left:auto"></div>
     </div>
-    <script>
-        const html5Qrcode = new Html5Qrcode('reader');
-        const qrCodeSuccessCallback = (decodedText, decodedResult)=>{
-            if(decodedText){
-                document.getElementById('show').style.display = 'block';
-                document.getElementById('result').textContent = decodedText;
-                html5Qrcode.stop();
-            }
+  </header>
+
+  <main class="wrap">
+    <div class="grid">
+      <!-- Scanner -->
+      <section class="panel">
+        <div class="row">
+          <select id="cameraSelect" class="select" title="Escolher câmera"></select>
+          <button id="btnStart" class="btn primary">Iniciar</button>
+          <button id="btnStop" class="btn" disabled>Parar</button>
+          <button id="btnRescan" class="btn" style="display:none">Ler novamente</button>
+        </div>
+
+        <div id="reader"></div>
+        <p class="help" id="hint">Dica: use a câmera traseira e mantenha o QR dentro do quadrado.</p>
+        <div id="error" class="error" style="display:none"></div>
+      </section>
+
+      <!-- Resultado -->
+      <section class="panel" id="resultPanel" style="display:none">
+        <div class="row" style="justify-content: space-between;">
+          <h2 style="margin:0;">Resultado</h2>
+          <div class="row">
+            <button id="btnCopy" class="btn">Copiar JSON</button>
+            <button id="btnDownload" class="btn" title="Baixar JSON">Baixar</button>
+          </div>
+        </div>
+
+        <div class="spacer"></div>
+
+        <div class="cards" id="cards"></div>
+
+        <div class="spacer"></div>
+        <details open>
+          <summary class="row" style="cursor:pointer"><strong>JSON bruto</strong></summary>
+          <pre id="raw"></pre>
+        </details>
+      </section>
+    </div>
+  </main>
+
+  <footer>Interface elegante • Modo escuro automático • Totalmente local</footer>
+
+  <script>
+    // ====== Mantendo sua base: Html5Qrcode de ./qrScript.js ======
+    const readerId = 'reader';
+    const html5Qrcode = new Html5Qrcode(readerId);
+    let lastDecoded = null;
+
+    // ====== UI refs ======
+    const $ = (q)=>document.querySelector(q);
+    const errorEl = $('#error');
+    const hintEl = $('#hint');
+    const resultPanel = $('#resultPanel');
+    const rawEl = $('#raw');
+    const cardsEl = $('#cards');
+
+    const btnStart = $('#btnStart');
+    const btnStop  = $('#btnStop');
+    const btnRescan = $('#btnRescan');
+    const btnCopy = $('#btnCopy');
+    const btnDownload = $('#btnDownload');
+    const cameraSelect = $('#cameraSelect');
+
+    // ====== UX helpers ======
+    function showError(msg){
+      errorEl.textContent = msg || '';
+      errorEl.style.display = msg ? 'block' : 'none';
+    }
+    function esc(v){ return String(v ?? '').replace(/[&<>]/g, s=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[s])); }
+    function formatDate(v){
+      try{ const d = new Date(v); if(isNaN(d)) return String(v??''); 
+        return new Intl.DateTimeFormat('pt-BR',{dateStyle:'short', timeStyle:'short'}).format(d);
+      }catch{ return String(v??''); }
+    }
+
+    // ====== Câmeras ======
+    async function listCameras(){
+      try{
+        const devices = await Html5Qrcode.getCameras();
+        cameraSelect.innerHTML = '';
+        devices.forEach((d,i)=>{
+          const opt = document.createElement('option');
+          opt.value = d.id; opt.textContent = d.label || `Câmera ${i+1}`;
+          cameraSelect.appendChild(opt);
+        });
+        const back = devices.find(x => /back|rear|traseira/i.test(x.label||''));
+        cameraSelect.value = back?.id || devices[0]?.id || '';
+      }catch(e){
+        showError('Não foi possível listar câmeras. Permita o acesso ao iniciar.');
+      }
+    }
+
+    // ====== Scanner ======
+    const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+
+    async function startScan(){
+      try{
+        showError('');
+        hintEl.innerHTML = '<span class="spinner"></span>Iniciando leitura…';
+
+        // pedir permissão antes melhora compatibilidade
+        try{
+          const s = await navigator.mediaDevices.getUserMedia({ video: true });
+          s.getTracks().forEach(t=>t.stop());
+        }catch(e){
+          showError('Permissão de câmera negada ou indisponível.');
+          return;
         }
-        const config = {fps:10, qrbox:{width:250, height:250}}
-        html5Qrcode.start({facingMode:"environment"}, config,qrCodeSuccessCallback );
-    </script>
-    
+
+        const selected = cameraSelect.value;
+        const constraints = selected ? { deviceId: { exact: selected } } : { facingMode: "environment" };
+
+        btnStart.disabled = true; btnStop.disabled = false; btnRescan.style.display = 'none';
+        await html5Qrcode.start(constraints, config, onSuccess, /*onFailure*/()=>{});
+        hintEl.textContent = 'Lendo… mantenha o QR dentro do quadrado.';
+      }catch(err){
+        btnStart.disabled = false; btnStop.disabled = true;
+        showError('Erro ao iniciar: ' + (err?.message || err));
+      }
+    }
+
+    async function stopScan(){
+      try{
+        await html5Qrcode.stop();
+        await html5Qrcode.clear();
+      }catch{} 
+      finally{
+        btnStart.disabled = false; btnStop.disabled = true; btnRescan.style.display = 'inline-block';
+        hintEl.textContent = 'Leitura pausada.';
+      }
+    }
+
+    function onSuccess(decodedText, _decodedResult){
+      if(!decodedText || decodedText === lastDecoded) return;
+      lastDecoded = decodedText;
+      stopScan(); // parar após leitura
+      renderData(decodedText);
+    }
+
+    function renderData(text){
+      // tentar interpretar como JSON
+      let data;
+      try{ data = JSON.parse(text); }
+      catch{
+        try{
+          const u = new URL(text);
+          const d = u.searchParams.get('data') || u.searchParams.get('json');
+          if (d) data = JSON.parse(d);
+        }catch{}
+      }
+
+      resultPanel.style.display = 'block';
+      // Se não for JSON, mostra o texto bruto apenas
+      if(!data || typeof data !== 'object'){
+        cardsEl.innerHTML = '';
+        rawEl.textContent = text;
+        return;
+      }
+
+      // Montar cards bonitos
+      const campos = [
+        ['OS', data.os],
+        ['Peça', data.peca],
+        ['Característica', data.caracteristica],
+        ['Descrição', data.descricao],
+        ['Gerado em', formatDate(data.gerado_em)],
+        ['Tempo de realização', data.tempo_realizacao],
+        ['Responsável', data.responsavel],
+      ];
+
+      cardsEl.innerHTML = '';
+      for(const [label, value] of campos){
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.innerHTML = `
+          <div class="label">${esc(label)}</div>
+          <div class="value">${esc(value ?? '—')}</div>
+        `;
+        cardsEl.appendChild(card);
+      }
+      rawEl.textContent = JSON.stringify(data, null, 2);
+    }
+
+    // ====== Ações extras ======
+    btnCopy.addEventListener('click', async ()=>{
+      try{ await navigator.clipboard.writeText(rawEl.textContent || ''); 
+        btnCopy.textContent = 'Copiado!'; setTimeout(()=>btnCopy.textContent='Copiar JSON', 1200);
+      }catch{}
+    });
+    btnDownload.addEventListener('click', ()=>{
+      const blob = new Blob([rawEl.textContent || ''], { type: 'application/json' });
+      const a = document.createElement('a');
+      let nome = 'qr-dados.json';
+      try{ const os = JSON.parse(rawEl.textContent || '{}').os; if(os) nome = `qr-${os}.json`; }catch{}
+      a.href = URL.createObjectURL(blob); a.download = nome; a.click(); URL.revokeObjectURL(a.href);
+    });
+
+    btnStart.addEventListener('click', startScan);
+    btnStop.addEventListener('click', stopScan);
+    btnRescan.addEventListener('click', ()=>{ lastDecoded = null; startScan(); });
+
+    // ====== Inicialização ======
+    window.addEventListener('load', listCameras);
+    // Se quiser iniciar automaticamente como no seu exemplo original, descomente:
+    // window.addEventListener('load', startScan);
+  </script>
 </body>
 </html>
